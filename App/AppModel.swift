@@ -20,6 +20,8 @@ final class AppModel {
 
     /// Bumped per list request so a slow response for an old query is dropped.
     private var requestSeq = 0
+    /// Bumped on login and logout so responses from a previous account or server are dropped.
+    private var session = 0
     private let pageSize = 50
 
     init() {
@@ -72,6 +74,7 @@ final class AppModel {
             me = try await candidate.me()
             Credentials.server = url
             Credentials.token = candidate.token
+            session += 1
             client = candidate
             await start()
         } catch {
@@ -80,6 +83,8 @@ final class AppModel {
     }
 
     func logout() {
+        session += 1
+        requestSeq += 1
         Credentials.token = nil
         client = nil
         me = nil
@@ -99,10 +104,12 @@ final class AppModel {
 
     func refreshFeeds() async {
         guard let client else { return }
+        let current = session
         do {
-            feeds = try await client.feeds()
+            let result = try await client.feeds()
+            if current == session { feeds = result }
         } catch {
-            report(error)
+            if current == session { report(error) }
         }
     }
 
@@ -145,12 +152,15 @@ final class AppModel {
 
     func open(_ id: Entry.ID) async {
         guard let client, let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        let current = session
         if entries[index].content == nil {
             do {
                 let full = try await client.entry(id: id)
+                guard current == session else { return }
                 if let i = entries.firstIndex(where: { $0.id == id }) { entries[i].content = full.content ?? "" }
             } catch {
-                report(error)
+                if current == session { report(error) }
+                return
             }
         }
         if let entry = entries.first(where: { $0.id == id }), !entry.isRead { setRead(entry, true) }
