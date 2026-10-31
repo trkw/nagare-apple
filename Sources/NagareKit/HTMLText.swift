@@ -14,3 +14,10 @@ public enum HTMLText {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+public enum PushToken {
+    /// APNs device tokens are sent to the server as lowercase hex.
+    public static func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
+    }
+}

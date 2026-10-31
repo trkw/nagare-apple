@@ -46,6 +46,7 @@ struct ReaderView: View {
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @State private var subscribing = false
+    @State private var pushEnabled = PushManager.shared.enabled
 
     var body: some View {
         @Bindable var model = model
@@ -67,6 +68,9 @@ struct SidebarView: View {
                         FeedRow(feed: feed, me: model.me?.name)
                             .tag(Selection.feed(feed.id))
                             .contextMenu {
+                                Button(feed.notify != 0 ? "新着の通知をやめる" : "新着を通知する") {
+                                    Task { await model.setNotify(feed, feed.notify == 0) }
+                                }
                                 Button("購読をやめる", role: .destructive) { Task { await model.unsubscribe(feed) } }
                             }
                     }
@@ -81,6 +85,20 @@ struct SidebarView: View {
             }
             ToolbarItem {
                 Menu {
+                    Toggle("このデバイスで通知を受け取る", isOn: Binding(
+                        get: { pushEnabled },
+                        set: { on in
+                            Task {
+                                if on {
+                                    pushEnabled = await PushManager.shared.enable()
+                                    if !pushEnabled { model.error = "通知が許可されていません。設定アプリで Nagare の通知をオンにしてください。" }
+                                } else {
+                                    await PushManager.shared.disable()
+                                    pushEnabled = false
+                                }
+                            }
+                        }
+                    ))
                     Button("ログアウト", role: .destructive) { model.logout() }
                 } label: {
                     Label("その他", systemImage: "ellipsis.circle")

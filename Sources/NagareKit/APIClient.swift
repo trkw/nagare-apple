@@ -117,6 +117,21 @@ public struct APIClient: Sendable {
 
     private struct Created: Decodable { let id: Int }
 
+    /// Turns new-entry notifications on or off for a feed.
+    public func setNotify(feedId: Int, _ on: Bool) async throws -> Feed {
+        try await post("/feeds/\(feedId)", method: "PATCH", json: ["notify": on])
+    }
+
+    /// Registers this device for APNs. `sandbox` is true for development builds.
+    public func registerPush(apnsToken: String, name: String, sandbox: Bool) async throws {
+        let _: Created = try await post("/push/targets", json: ["platform": "apns", "token": apnsToken, "name": name, "sandbox": sandbox])
+    }
+
+    public func unregisterPush(token: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["token": token])
+        _ = try await send(makeRequest("/push/targets", method: "DELETE", body: body))
+    }
+
     public func handoff(entryIds: [Int], note: String, toAgent: String? = nil) async throws {
         var json: [String: Any] = ["entry_ids": entryIds, "note": note]
         if let toAgent, !toAgent.isEmpty { json["to_agent"] = toAgent }

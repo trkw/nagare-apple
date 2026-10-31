@@ -77,12 +77,15 @@ final class AppModel {
             session += 1
             client = candidate
             await start()
+            if PushManager.shared.enabled { _ = await PushManager.shared.enable() }
         } catch {
             self.error = error.localizedDescription
         }
     }
 
     func logout() {
+        // The device stops getting this account's notifications.
+        if PushManager.shared.enabled { Task { await PushManager.shared.disable() } }
         session += 1
         requestSeq += 1
         Credentials.token = nil
@@ -164,6 +167,33 @@ final class AppModel {
             }
         }
         if let entry = entries.first(where: { $0.id == id }), !entry.isRead { setRead(entry, true) }
+    }
+
+    /// Opens an entry that may not be in the current list, e.g. from a notification.
+    func openEntry(id: Int) async {
+        guard let client else { return }
+        if !entries.contains(where: { $0.id == id }) {
+            let current = session
+            do {
+                let entry = try await client.entry(id: id)
+                guard current == session else { return }
+                entries.insert(entry, at: 0)
+            } catch {
+                report(error)
+                return
+            }
+        }
+        selectedEntryID = id
+    }
+
+    func setNotify(_ feed: Feed, _ on: Bool) async {
+        guard let client else { return }
+        do {
+            let updated = try await client.setNotify(feedId: feed.id, on)
+            if let i = feeds.firstIndex(where: { $0.id == feed.id }) { feeds[i] = updated }
+        } catch {
+            report(error)
+        }
     }
 
     func patch(_ id: Entry.ID, _ change: (inout Entry) -> Void) {
