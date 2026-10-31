@@ -34,10 +34,11 @@ final class PushManager: NSObject, UNUserNotificationCenterDelegate {
         return true
     }
 
-    func disable() async {
+    /// Pass the client when the model's one may already be gone, as on logout.
+    func disable(using client: APIClient? = nil) async {
         UserDefaults.standard.set(false, forKey: enabledKey)
         if let token = UserDefaults.standard.string(forKey: tokenKey) {
-            try? await model?.client?.unregisterPush(token: token)
+            try? await (client ?? model?.client)?.unregisterPush(token: token)
         }
         #if os(iOS)
         UIApplication.shared.unregisterForRemoteNotifications()

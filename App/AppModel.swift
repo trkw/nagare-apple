@@ -20,6 +20,8 @@ final class AppModel {
 
     /// Bumped per list request so a slow response for an old query is dropped.
     private var requestSeq = 0
+    /// An entry opened from a notification, kept through the next list load so that load does not close it.
+    private var pinnedEntryID: Entry.ID?
     /// Bumped on login and logout so responses from a previous account or server are dropped.
     private var session = 0
     private let pageSize = 50
@@ -84,8 +86,11 @@ final class AppModel {
     }
 
     func logout() {
-        // The device stops getting this account's notifications.
-        if PushManager.shared.enabled { Task { await PushManager.shared.disable() } }
+        // The device stops getting this account's notifications. Pass the outgoing client,
+        // because the task runs after client is cleared below.
+        if PushManager.shared.enabled, let outgoing = client {
+            Task { await PushManager.shared.disable(using: outgoing) }
+        }
         session += 1
         requestSeq += 1
         Credentials.token = nil
@@ -94,6 +99,7 @@ final class AppModel {
         feeds = []
         entries = []
         selectedEntryID = nil
+        pinnedEntryID = nil
     }
 
     private func start() async {
@@ -136,8 +142,14 @@ final class AppModel {
             if more {
                 entries += page
             } else {
+                let keep = pinnedEntryID.flatMap { id in selectedEntryID == id ? entries.first { $0.id == id } : nil }
                 entries = page
-                selectedEntryID = nil
+                if let keep {
+                    if !page.contains(where: { $0.id == keep.id }) { entries.insert(keep, at: 0) }
+                } else {
+                    selectedEntryID = nil
+                }
+                pinnedEntryID = nil
             }
             hasMore = page.count == pageSize
         } catch {
@@ -177,12 +189,13 @@ final class AppModel {
             do {
                 let entry = try await client.entry(id: id)
                 guard current == session else { return }
-                entries.insert(entry, at: 0)
+                if !entries.contains(where: { $0.id == id }) { entries.insert(entry, at: 0) }
             } catch {
                 report(error)
                 return
             }
         }
+        pinnedEntryID = id
         selectedEntryID = id
     }
 
