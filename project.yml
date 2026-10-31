@@ -31,3 +31,6 @@ targets:
         ENABLE_APP_SANDBOX: YES
         ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
         ENABLE_HARDENED_RUNTIME: YES
+        # Push notifications. Xcode switches aps-environment to production when archiving for distribution.
+        "CODE_SIGN_ENTITLEMENTS[sdk=iphone*]": Config/Nagare-iOS.entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": Config/Nagare-macOS.entitlements

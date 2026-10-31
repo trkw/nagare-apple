@@ -20,6 +20,8 @@ final class AppModel {
 
     /// Bumped per list request so a slow response for an old query is dropped.
     private var requestSeq = 0
+    /// An entry opened from a notification, kept through the next list load so that load does not close it.
+    private var pinnedEntryID: Entry.ID?
     /// Bumped on login and logout so responses from a previous account or server are dropped.
     private var session = 0
     private let pageSize = 50
@@ -77,12 +79,18 @@ final class AppModel {
             session += 1
             client = candidate
             await start()
+            if PushManager.shared.enabled { _ = await PushManager.shared.enable() }
         } catch {
             self.error = error.localizedDescription
         }
     }
 
     func logout() {
+        // The device stops getting this account's notifications. Pass the outgoing client,
+        // because the task runs after client is cleared below.
+        if PushManager.shared.enabled, let outgoing = client {
+            Task { await PushManager.shared.disable(using: outgoing) }
+        }
         session += 1
         requestSeq += 1
         Credentials.token = nil
@@ -91,6 +99,7 @@ final class AppModel {
         feeds = []
         entries = []
         selectedEntryID = nil
+        pinnedEntryID = nil
     }
 
     private func start() async {
@@ -133,8 +142,14 @@ final class AppModel {
             if more {
                 entries += page
             } else {
+                let keep = pinnedEntryID.flatMap { id in selectedEntryID == id ? entries.first { $0.id == id } : nil }
                 entries = page
-                selectedEntryID = nil
+                if let keep {
+                    if !page.contains(where: { $0.id == keep.id }) { entries.insert(keep, at: 0) }
+                } else {
+                    selectedEntryID = nil
+                }
+                pinnedEntryID = nil
             }
             hasMore = page.count == pageSize
         } catch {
@@ -164,6 +179,34 @@ final class AppModel {
             }
         }
         if let entry = entries.first(where: { $0.id == id }), !entry.isRead { setRead(entry, true) }
+    }
+
+    /// Opens an entry that may not be in the current list, e.g. from a notification.
+    func openEntry(id: Int) async {
+        guard let client else { return }
+        if !entries.contains(where: { $0.id == id }) {
+            let current = session
+            do {
+                let entry = try await client.entry(id: id)
+                guard current == session else { return }
+                if !entries.contains(where: { $0.id == id }) { entries.insert(entry, at: 0) }
+            } catch {
+                report(error)
+                return
+            }
+        }
+        pinnedEntryID = id
+        selectedEntryID = id
+    }
+
+    func setNotify(_ feed: Feed, _ on: Bool) async {
+        guard let client else { return }
+        do {
+            let updated = try await client.setNotify(feedId: feed.id, on)
+            if let i = feeds.firstIndex(where: { $0.id == feed.id }) { feeds[i] = updated }
+        } catch {
+            report(error)
+        }
     }
 
     func patch(_ id: Entry.ID, _ change: (inout Entry) -> Void) {

@@ -2,12 +2,18 @@ import SwiftUI
 
 @main
 struct NagareApp: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #else
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @State private var model = AppModel()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(model)
+                .task { PushManager.shared.configure(model: model) }
         }
         .commands { ReaderCommands(model: model) }
     }

@@ -41,3 +41,18 @@ APIクライアントのテストは `swift test` で実行できます。
 # trkw/nagare の apps/api で
 bun run token:create --name iphone --kind app --remote
 ```
+
+## 通知（APNs）
+
+1. Apple Developer の Keys で「Apple Push Notifications service (APNs)」を有効にしたキーを作り、.p8 をダウンロードします。
+2. サーバー側（trkw/nagare）に設定します。
+
+   ```sh
+   # apps/api で
+   bunx wrangler secret put APNS_KEY      # .p8 の中身をそのまま貼る
+   ```
+
+   `wrangler.jsonc` の `APNS_KEY_ID`（キーID）、`APNS_TEAM_ID`（チームID）、`APNS_TOPIC`（バンドルID、`dev.trkw.nagare`）を埋めます。
+3. Xcode の Signing & Capabilities に Push Notifications が出ていることを確認します（`Config/*.entitlements` で指定済み）。
+
+アプリではサイドバーのメニューの「このデバイスで通知を受け取る」で端末を登録し、フィードの右クリック（長押し）メニューの「新着を通知する」で通知するフィードを選びます。Debugビルドは sandbox、Releaseビルドは本番のAPNsに登録されます。

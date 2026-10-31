@@ -40,3 +40,9 @@ final class NagareKitTests: XCTestCase {
         XCTAssertEqual(HTMLText.plain("<p>こんにちは&nbsp;<b>世界</b></p><script>x()</script><p>次</p>"), "こんにちは 世界\n次")
     }
 }
+
+final class PushTokenTests: XCTestCase {
+    func testHex() {
+        XCTAssertEqual(PushToken.hex(Data([0x00, 0xab, 0x10, 0xff])), "00ab10ff")
+    }
+}
